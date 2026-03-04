@@ -1344,7 +1344,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   classList={{
                     "size-6 flex items-center justify-center": true,
                     "text-text-base": !accepting(),
-                    "hover:bg-surface-success-base": accepting(),
+                    "bg-surface-success-base hover:bg-surface-success-weak": accepting(),
                   }}
                   aria-label={
                     accepting()

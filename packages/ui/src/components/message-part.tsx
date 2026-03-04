@@ -706,7 +706,7 @@ export function AssistantMessageDisplay(props: {
 
 function ContextToolGroup(props: { parts: ToolPart[]; busy?: boolean }) {
   const i18n = useI18n()
-  const [open, setOpen] = createSignal(false)
+  const [open, setOpen] = createSignal(true)
   const pending = createMemo(
     () =>
       !!props.busy || props.parts.some((part) => part.state.status === "pending" || part.state.status === "running"),
@@ -1255,9 +1255,7 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
 
   const handleInspect = () => {
     if (props.message.role !== "assistant") return
-    window.dispatchEvent(
-      new CustomEvent("opencode:inspect-prompt", { detail: { messageID: props.message.id } }),
-    )
+    window.dispatchEvent(new CustomEvent("opencode:inspect-prompt", { detail: { messageID: props.message.id } }))
   }
 
   const handleDelete = () => {
@@ -1301,11 +1299,7 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
         <Show when={showCopy()}>
           <div data-slot="text-part-copy-wrapper" data-interrupted={interrupted() ? "" : undefined}>
             <Show when={props.message.role === "assistant"}>
-              <Tooltip
-                value={i18n.t("ui.message.inspectPrompt")}
-                placement="top"
-                gutter={4}
-              >
+              <Tooltip value={i18n.t("ui.message.inspectPrompt")} placement="top" gutter={4}>
                 <IconButton
                   icon="eye"
                   size="normal"
