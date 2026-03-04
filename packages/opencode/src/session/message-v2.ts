@@ -437,6 +437,19 @@ export namespace MessageV2 {
     structured: z.any().optional(),
     variant: z.string().optional(),
     finish: z.string().optional(),
+    prompt: z
+      .object({
+        system: z.array(z.string()),
+        tools: z.array(
+          z.object({
+            name: z.string(),
+            description: z.string().optional(),
+            parameters: z.any().optional(),
+          }),
+        ),
+        params: z.record(z.string(), z.any()),
+      })
+      .optional(),
   }).meta({
     ref: "AssistantMessage",
   })

@@ -50,7 +50,12 @@ export namespace SessionProcessor {
           try {
             let currentText: MessageV2.TextPart | undefined
             let reasoningMap: Record<string, MessageV2.ReasoningPart> = {}
-            const stream = await LLM.stream(streamInput)
+            const { stream, promptMeta } = await LLM.stream(streamInput)
+
+            if (!input.assistantMessage.prompt && promptMeta) {
+              input.assistantMessage.prompt = promptMeta
+              await Session.updateMessage(input.assistantMessage)
+            }
 
             for await (const value of stream.fullStream) {
               input.abort.throwIfAborted()

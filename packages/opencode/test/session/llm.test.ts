@@ -296,7 +296,7 @@ describe("session.llm.stream", () => {
           tools: {},
         })
 
-        for await (const _ of stream.fullStream) {
+        for await (const _ of stream.stream.fullStream) {
         }
 
         const capture = await request
@@ -425,7 +425,7 @@ describe("session.llm.stream", () => {
           tools: {},
         })
 
-        for await (const _ of stream.fullStream) {
+        for await (const _ of stream.stream.fullStream) {
         }
 
         const capture = await request
@@ -547,7 +547,7 @@ describe("session.llm.stream", () => {
           tools: {},
         })
 
-        for await (const _ of stream.fullStream) {
+        for await (const _ of stream.stream.fullStream) {
         }
 
         const capture = await request
@@ -648,7 +648,7 @@ describe("session.llm.stream", () => {
           tools: {},
         })
 
-        for await (const _ of stream.fullStream) {
+        for await (const _ of stream.stream.fullStream) {
         }
 
         const capture = await request

@@ -29,6 +29,7 @@ import { setSessionHandoff } from "@/pages/session/handoff"
 
 export function SessionSidePanel(props: {
   reviewPanel: () => JSX.Element
+  promptPanel?: () => JSX.Element
   activeDiff?: string
   focusReviewDiff: (path: string) => void
 }) {
@@ -109,12 +110,13 @@ export function SessionSidePanel(props: {
   const openedTabs = createMemo(() =>
     tabs()
       .all()
-      .filter((tab) => tab !== "context" && tab !== "review"),
+      .filter((tab) => tab !== "context" && tab !== "review" && tab !== "prompt"),
   )
 
   const activeTab = createMemo(() => {
     const active = tabs().active()
     if (active === "context") return "context"
+    if (active === "prompt" && props.promptPanel) return "prompt"
     if (active === "review" && reviewTab()) return "review"
     if (active && file.pathFromTab(active)) return normalizeTab(active)
 
@@ -242,6 +244,13 @@ export function SessionSidePanel(props: {
                         </div>
                       </Tabs.Trigger>
                     </Show>
+                    <Show when={props.promptPanel}>
+                      <Tabs.Trigger value="prompt">
+                        <div class="flex items-center gap-1.5">
+                          <div>Prompt</div>
+                        </div>
+                      </Tabs.Trigger>
+                    </Show>
                     <Show when={contextOpen()}>
                       <Tabs.Trigger
                         value="context"
@@ -295,6 +304,12 @@ export function SessionSidePanel(props: {
                 <Show when={reviewTab()}>
                   <Tabs.Content value="review" class="flex flex-col h-full overflow-hidden contain-strict">
                     <Show when={activeTab() === "review"}>{props.reviewPanel()}</Show>
+                  </Tabs.Content>
+                </Show>
+
+                <Show when={props.promptPanel}>
+                  <Tabs.Content value="prompt" class="flex flex-col h-full overflow-hidden contain-strict">
+                    <Show when={activeTab() === "prompt"}>{props.promptPanel!()}</Show>
                   </Tabs.Content>
                 </Show>
 

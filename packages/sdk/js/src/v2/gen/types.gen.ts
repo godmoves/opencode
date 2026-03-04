@@ -241,6 +241,17 @@ export type AssistantMessage = {
   structured?: unknown
   variant?: string
   finish?: string
+  prompt?: {
+    system: Array<string>
+    tools: Array<{
+      name: string
+      description?: string
+      parameters?: unknown
+    }>
+    params: {
+      [key: string]: unknown
+    }
+  }
 }
 
 export type Message = UserMessage | AssistantMessage

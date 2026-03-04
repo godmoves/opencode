@@ -27,7 +27,7 @@ import { checksum, base64Encode } from "@opencode-ai/util/encode"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useLanguage } from "@/context/language"
 import { useNavigate, useParams } from "@solidjs/router"
-import { UserMessage } from "@opencode-ai/sdk/v2"
+import { UserMessage, type AssistantMessage, type Message } from "@opencode-ai/sdk/v2"
 import { useSDK } from "@/context/sdk"
 import { usePrompt } from "@/context/prompt"
 import { useComments } from "@/context/comments"
@@ -43,6 +43,7 @@ import { SessionComposerRegion, createSessionComposerState } from "@/pages/sessi
 import { SessionMobileTabs } from "@/pages/session/session-mobile-tabs"
 import { SessionSidePanel } from "@/pages/session/session-side-panel"
 import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
+import { PromptInspector } from "@opencode-ai/ui/prompt-inspector"
 
 const emptyUserMessages: UserMessage[] = []
 
@@ -273,6 +274,34 @@ export default function Page() {
       overflow: false,
       bottom: true,
     },
+  })
+
+  const [inspectedMessageID, setInspectedMessageID] = createSignal<string | undefined>()
+
+  // Listen for prompt inspect events from the eye button in TextPartDisplay
+  onMount(() => {
+    const handler = (e: Event) => {
+      const id = (e as CustomEvent).detail?.messageID as string | undefined
+      if (!id) return
+      setInspectedMessageID(id)
+      if (!view().reviewPanel.opened()) view().reviewPanel.open()
+      tabs().setActive("prompt")
+    }
+    window.addEventListener("opencode:inspect-prompt", handler)
+    onCleanup(() => window.removeEventListener("opencode:inspect-prompt", handler))
+  })
+
+  // Listen for delete message events from the trash button in TextPartDisplay
+  onMount(() => {
+    const handler = async (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      const sessionID = detail?.sessionID as string | undefined
+      const messageID = detail?.messageID as string | undefined
+      if (!sessionID || !messageID) return
+      await sdk.client.session.deleteMessage({ sessionID, messageID }).catch(() => {})
+    }
+    window.addEventListener("opencode:delete-message", handler)
+    onCleanup(() => window.removeEventListener("opencode:delete-message", handler))
   })
 
   const composer = createSessionComposerState()
@@ -818,6 +847,30 @@ export default function Page() {
     </Show>
   )
 
+  const inspectedMessage = createMemo(() => {
+    const id = inspectedMessageID()
+    if (!id || !params.id) return undefined
+    const msgs = sync.data.message[params.id] ?? []
+    return msgs.find((m): m is AssistantMessage => m.id === id && m.role === "assistant")
+  })
+
+  const allMessages = createMemo(() => {
+    if (!params.id) return [] as Message[]
+    return sync.data.message[params.id] ?? ([] as Message[])
+  })
+
+  const promptPanel = () => (
+    <div class="flex flex-col h-full overflow-hidden bg-background-stronger contain-strict">
+      <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
+        <PromptInspector
+          message={inspectedMessage()}
+          allMessages={allMessages()}
+          parts={sync.data.part}
+        />
+      </div>
+    </div>
+  )
+
   const reviewPanel = () => (
     <div class="flex flex-col h-full overflow-hidden bg-background-stronger contain-strict">
       <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
@@ -1281,7 +1334,7 @@ export default function Page() {
           </Show>
         </div>
 
-        <SessionSidePanel reviewPanel={reviewPanel} activeDiff={tree.activeDiff} focusReviewDiff={focusReviewDiff} />
+        <SessionSidePanel reviewPanel={reviewPanel} promptPanel={promptPanel} activeDiff={tree.activeDiff} focusReviewDiff={focusReviewDiff} />
       </div>
 
       <TerminalPanel />

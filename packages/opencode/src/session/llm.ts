@@ -41,9 +41,24 @@ export namespace LLM {
     toolChoice?: "auto" | "required" | "none"
   }
 
-  export type StreamOutput = StreamTextResult<ToolSet, unknown>
+  export type ToolMeta = {
+    name: string
+    description?: string
+    parameters?: unknown
+  }
 
-  export async function stream(input: StreamInput) {
+  export type PromptMeta = {
+    system: string[]
+    tools: ToolMeta[]
+    params: Record<string, any>
+  }
+
+  export type StreamOutput = {
+    stream: StreamTextResult<ToolSet, unknown>
+    promptMeta: PromptMeta
+  }
+
+  export async function stream(input: StreamInput): Promise<StreamOutput> {
     const l = log
       .clone()
       .tag("providerID", input.model.providerID)
@@ -169,7 +184,36 @@ export namespace LLM {
       })
     }
 
-    return streamText({
+    const toolsMeta: ToolMeta[] = []
+    for (const [k, v] of Object.entries(tools)) {
+      if (k === "invalid" || k === "_noop") continue
+      let schema: unknown
+      try {
+        const raw = v.inputSchema as any
+        schema = raw?.jsonSchema ?? raw
+      } catch {}
+      toolsMeta.push({
+        name: k,
+        description: v.description,
+        parameters: schema,
+      })
+    }
+
+    const promptMeta: PromptMeta = {
+      system: [...system],
+      tools: toolsMeta,
+      params: {
+        temperature: params.temperature,
+        topP: params.topP,
+        topK: params.topK,
+        maxOutputTokens,
+        toolChoice: input.toolChoice,
+        modelID: input.model.id,
+        providerID: input.model.providerID,
+      },
+    }
+
+    const result = streamText({
       onError(error) {
         l.error("stream error", {
           error,
@@ -253,6 +297,8 @@ export namespace LLM {
         },
       },
     })
+
+    return { stream: result, promptMeta }
   }
 
   async function resolveTools(input: Pick<StreamInput, "tools" | "agent" | "user">) {

@@ -31,6 +31,7 @@ import {
 import { useData } from "../context"
 import { useFileComponent } from "../context/file"
 import { useDialog } from "../context/dialog"
+
 import { useI18n } from "../context/i18n"
 import { BasicTool } from "./basic-tool"
 import { GenericTool } from "./basic-tool"
@@ -877,6 +878,14 @@ export function UserMessageDisplay(props: {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const handleDelete = () => {
+    window.dispatchEvent(
+      new CustomEvent("opencode:delete-message", {
+        detail: { sessionID: props.message.sessionID, messageID: props.message.id },
+      }),
+    )
+  }
+
   return (
     <div data-component="user-message" data-interrupted={props.interrupted ? "" : undefined}>
       <Show when={attachments().length > 0}>
@@ -959,6 +968,19 @@ export function UserMessageDisplay(props: {
                   handleCopy()
                 }}
                 aria-label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyMessage")}
+              />
+            </Tooltip>
+            <Tooltip value={i18n.t("ui.message.deleteMessage")} placement="top" gutter={4}>
+              <IconButton
+                icon="trash"
+                size="normal"
+                variant="ghost"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  handleDelete()
+                }}
+                aria-label={i18n.t("ui.message.deleteMessage")}
               />
             </Tooltip>
           </div>
@@ -1231,6 +1253,21 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
     return items.filter((x) => !!x).join(" \u00B7 ")
   })
 
+  const handleInspect = () => {
+    if (props.message.role !== "assistant") return
+    window.dispatchEvent(
+      new CustomEvent("opencode:inspect-prompt", { detail: { messageID: props.message.id } }),
+    )
+  }
+
+  const handleDelete = () => {
+    window.dispatchEvent(
+      new CustomEvent("opencode:delete-message", {
+        detail: { sessionID: props.message.sessionID, messageID: props.message.id },
+      }),
+    )
+  }
+
   const displayText = () => (part().text ?? "").trim()
   const throttledText = createThrottledValue(displayText)
   const isLastTextPart = createMemo(() => {
@@ -1263,6 +1300,22 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
         </div>
         <Show when={showCopy()}>
           <div data-slot="text-part-copy-wrapper" data-interrupted={interrupted() ? "" : undefined}>
+            <Show when={props.message.role === "assistant"}>
+              <Tooltip
+                value={i18n.t("ui.message.inspectPrompt")}
+                placement="top"
+                gutter={4}
+              >
+                <IconButton
+                  icon="eye"
+                  size="normal"
+                  variant="ghost"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={handleInspect}
+                  aria-label={i18n.t("ui.message.inspectPrompt")}
+                />
+              </Tooltip>
+            </Show>
             <Tooltip
               value={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyResponse")}
               placement="top"
@@ -1275,6 +1328,16 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={handleCopy}
                 aria-label={copied() ? i18n.t("ui.message.copied") : i18n.t("ui.message.copyResponse")}
+              />
+            </Tooltip>
+            <Tooltip value={i18n.t("ui.message.deleteMessage")} placement="top" gutter={4}>
+              <IconButton
+                icon="trash"
+                size="normal"
+                variant="ghost"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={handleDelete}
+                aria-label={i18n.t("ui.message.deleteMessage")}
               />
             </Tooltip>
             <Show when={meta()}>
@@ -1462,6 +1525,112 @@ ToolRegistry.register({
           </div>
         }
       />
+    )
+  },
+})
+
+function parseSearchResults(output: string) {
+  // Split on "Title: " at the start of a line to separate each result
+  const parts = output.split(/(?=^Title: )/m).filter((b) => b.trim())
+  if (parts.length <= 1 && !output.startsWith("Title: ")) {
+    // Could not parse structured results — return as single block
+    if (!output.trim()) return []
+    return [{ title: output.trim().split("\n")[0].slice(0, 80), url: "", meta: [] as string[], body: output.trim() }]
+  }
+  return parts.map((block) => {
+    const lines = block.trim().split("\n")
+    let title = ""
+    let url = ""
+    const meta: string[] = []
+    const body: string[] = []
+    let past = false
+    for (const line of lines) {
+      if (!past && line.startsWith("Title: ")) {
+        title = line.slice(7)
+      } else if (!past && line.startsWith("URL: ")) {
+        url = line.slice(5)
+      } else if (!past && /^(ID|Score|Published Date|Author): /.test(line)) {
+        meta.push(line)
+      } else if (!past && line === "") {
+        past = true
+      } else {
+        past = true
+        body.push(line)
+      }
+    }
+    if (!title) title = url || body[0]?.slice(0, 80) || "Untitled"
+    return { title, url, meta, body: body.join("\n").trim() }
+  })
+}
+
+ToolRegistry.register({
+  name: "websearch",
+  render(props) {
+    const i18n = useI18n()
+    const pending = createMemo(() => props.status === "pending" || props.status === "running")
+    const query = createMemo(() => {
+      const value = props.input.query
+      if (typeof value !== "string") return ""
+      return value
+    })
+    const results = createMemo(() => {
+      if (!props.output) return []
+      return parseSearchResults(props.output)
+    })
+    return (
+      <BasicTool
+        {...props}
+        icon="magnifying-glass"
+        trigger={
+          <div data-slot="basic-tool-tool-info-structured">
+            <div data-slot="basic-tool-tool-info-main">
+              <span data-slot="basic-tool-tool-title">
+                <TextShimmer text={i18n.t("ui.tool.websearch")} active={pending()} />
+              </span>
+              <Show when={query()}>
+                <span data-slot="basic-tool-tool-subtitle">
+                  <TextShimmer text={query()} active={pending()} />
+                </span>
+              </Show>
+            </div>
+          </div>
+        }
+      >
+        <Show when={results().length > 0}>
+          <div data-slot="websearch-results">
+            <For each={results()}>
+              {(r) => (
+                <Collapsible variant="ghost">
+                  <Collapsible.Trigger>
+                    <div data-component="websearch-result-trigger">
+                      <span class="text-12-medium truncate">{r.title}</span>
+                      <Collapsible.Arrow />
+                    </div>
+                  </Collapsible.Trigger>
+                  <Collapsible.Content>
+                    <div data-slot="websearch-result-detail">
+                      <Show when={r.url}>
+                        <a
+                          href={r.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="text-11-regular"
+                          data-slot="websearch-result-url"
+                        >
+                          {r.url}
+                        </a>
+                      </Show>
+                      <Show when={r.body}>
+                        <pre data-slot="websearch-result-body">{r.body}</pre>
+                      </Show>
+                    </div>
+                  </Collapsible.Content>
+                </Collapsible>
+              )}
+            </For>
+          </div>
+        </Show>
+      </BasicTool>
     )
   },
 })
