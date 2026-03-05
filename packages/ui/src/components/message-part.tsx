@@ -1152,22 +1152,26 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
                   </div>
                 )
               }
-              const [title, ...rest] = cleaned.split(": ")
+              const info = getToolInfo(part().tool, input())
+              const detail: string | undefined = (() => {
+                const tool = part().tool
+                const inp = input()
+                if (tool === "bash" && inp.command) return `$ ${inp.command}` as string
+                if (tool === "webfetch" && inp.url) return inp.url as string
+                if (tool === "websearch" && inp.query) return inp.query as string
+                return info.subtitle
+              })()
               return (
                 <Card variant="error">
                   <div data-component="tool-error">
                     <Icon name="circle-ban-sign" size="small" />
-                    <Switch>
-                      <Match when={title && title.length < 30}>
-                        <div data-slot="message-part-tool-error-content">
-                          <div data-slot="message-part-tool-error-title">{title}</div>
-                          <span data-slot="message-part-tool-error-message">{rest.join(": ")}</span>
-                        </div>
-                      </Match>
-                      <Match when={true}>
-                        <span data-slot="message-part-tool-error-message">{cleaned}</span>
-                      </Match>
-                    </Switch>
+                    <div data-slot="message-part-tool-error-content">
+                      <div data-slot="message-part-tool-error-title">{info.title} failed</div>
+                      <Show when={detail}>
+                        {(d) => <span data-slot="message-part-tool-error-detail">{d()}</span>}
+                      </Show>
+                      <span data-slot="message-part-tool-error-message">{cleaned}</span>
+                    </div>
                   </div>
                 </Card>
               )
@@ -1490,7 +1494,6 @@ ToolRegistry.register({
     return (
       <BasicTool
         {...props}
-        hideDetails
         icon="window-cursor"
         trigger={
           <div data-slot="basic-tool-tool-info-structured">
@@ -1498,27 +1501,19 @@ ToolRegistry.register({
               <span data-slot="basic-tool-tool-title">
                 <TextShimmer text={i18n.t("ui.tool.webfetch")} active={pending()} />
               </span>
-              <Show when={!pending() && url()}>
-                <a
-                  data-slot="basic-tool-tool-subtitle"
-                  class="clickable subagent-link"
-                  href={url()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  {url()}
-                </a>
+              <Show when={url()}>
+                <span data-slot="basic-tool-tool-subtitle">
+                  <TextShimmer text={url()} active={pending()} />
+                </span>
               </Show>
             </div>
-            <Show when={!pending() && url()}>
-              <div data-component="tool-action">
-                <Icon name="square-arrow-top-right" size="small" />
-              </div>
-            </Show>
           </div>
         }
-      />
+      >
+        <Show when={props.output}>
+          <pre data-slot="webfetch-output">{props.output}</pre>
+        </Show>
+      </BasicTool>
     )
   },
 })

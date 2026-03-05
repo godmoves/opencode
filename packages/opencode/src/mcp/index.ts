@@ -395,7 +395,6 @@ export namespace MCP {
           break
         } catch (error) {
           lastError = error instanceof Error ? error : new Error(String(error))
-
           // Handle OAuth-specific errors
           if (error instanceof UnauthorizedError) {
             log.info("mcp server requires authentication", { key, transport: name })
@@ -440,6 +439,7 @@ export namespace MCP {
           }
         }
       }
+
     }
 
     if (mcp.type === "local") {

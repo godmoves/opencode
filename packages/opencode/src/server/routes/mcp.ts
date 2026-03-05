@@ -3,11 +3,49 @@ import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { MCP } from "../../mcp"
 import { Config } from "../../config/config"
+import { ToolRegistry } from "../../tool/registry"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
+const ToolInfo = z.object({
+  id: z.string(),
+  source: z.enum(["builtin", "mcp"]),
+  description: z.string().optional(),
+})
+
 export const McpRoutes = lazy(() =>
   new Hono()
+    .get(
+      "/tools",
+      describeRoute({
+        summary: "List all available tools",
+        description: "List all available tools including built-in and MCP tools.",
+        operationId: "mcp.tools",
+        responses: {
+          200: {
+            description: "List of available tools",
+            content: {
+              "application/json": {
+                schema: resolver(z.array(ToolInfo)),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        const builtin = await ToolRegistry.ids()
+        const mcpTools = await MCP.tools().catch(() => ({}))
+        const result = [
+          ...builtin.map((id) => ({ id, source: "builtin" as const })),
+          ...Object.entries(mcpTools).map(([id, tool]) => ({
+            id,
+            source: "mcp" as const,
+            description: (tool as any).description,
+          })),
+        ]
+        return c.json(result)
+      },
+    )
     .get(
       "/",
       describeRoute({

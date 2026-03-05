@@ -317,8 +317,9 @@
 
   [data-slot="message-part-tool-error-content"] {
     display: flex;
-    align-items: start;
-    gap: 8px;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
   }
 
   [data-slot="message-part-tool-error-title"] {
@@ -330,6 +331,16 @@
     letter-spacing: var(--letter-spacing-normal);
     color: var(--text-on-critical-base);
     white-space: nowrap;
+  }
+
+  [data-slot="message-part-tool-error-detail"] {
+    font-family: var(--font-family-mono);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-on-critical-base);
+    opacity: 0.8;
+    white-space: pre-wrap;
+    word-break: break-all;
   }
 
   [data-slot="message-part-tool-error-message"] {
@@ -1298,5 +1309,18 @@
   border-radius: 8px;
   background: var(--color-background-surface);
   max-height: 300px;
+  overflow: auto;
+}
+
+[data-slot="webfetch-output"] {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--color-background-surface);
+  max-height: 400px;
   overflow: auto;
 }
