@@ -1159,6 +1159,10 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
                 if (tool === "bash" && inp.command) return `$ ${inp.command}` as string
                 if (tool === "webfetch" && inp.url) return inp.url as string
                 if (tool === "websearch" && inp.query) return inp.query as string
+                if (tool === "web_search_search") {
+                  const raw = inp.queries || inp.query || inp.search_query || inp.keyword || inp.q
+                  return (Array.isArray(raw) ? raw.join(", ") : raw) as string
+                }
                 return info.subtitle
               })()
               return (
@@ -1167,9 +1171,7 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
                     <Icon name="circle-ban-sign" size="small" />
                     <div data-slot="message-part-tool-error-content">
                       <div data-slot="message-part-tool-error-title">{info.title} failed</div>
-                      <Show when={detail}>
-                        {(d) => <span data-slot="message-part-tool-error-detail">{d()}</span>}
-                      </Show>
+                      <Show when={detail}>{(d) => <span data-slot="message-part-tool-error-detail">{d()}</span>}</Show>
                       <span data-slot="message-part-tool-error-message">{cleaned}</span>
                     </div>
                   </div>
@@ -1518,6 +1520,23 @@ ToolRegistry.register({
   },
 })
 
+function parseMcpSearchResults(output: string) {
+  const blocks = output.split(/\[webpage \d+ begin\]/).filter((b) => b.trim())
+  return blocks
+    .map((block) => {
+      const titleMatch = block.match(/\[webpage title\](.+?)(?:\n|\[webpage)/)
+      const urlMatch = block.match(/\[webpage url\](.+?)(?:\n|\[webpage)/)
+      const bodyMatch = block.match(/\[webpage content begin\]([\s\S]*?)\[webpage content end\]/)
+      return {
+        title: titleMatch?.[1]?.trim() || "Untitled",
+        url: urlMatch?.[1]?.trim() || "",
+        meta: [] as string[],
+        body: bodyMatch?.[1]?.trim() || "",
+      }
+    })
+    .filter((r) => r.title !== "Untitled" || r.body)
+}
+
 function parseSearchResults(output: string) {
   // Split on "Title: " at the start of a line to separate each result
   const parts = output.split(/(?=^Title: )/m).filter((b) => b.trim())
@@ -1552,18 +1571,90 @@ function parseSearchResults(output: string) {
   })
 }
 
+function WebSearchRender(props: ToolProps) {
+  const i18n = useI18n()
+  const pending = createMemo(() => props.status === "pending" || props.status === "running")
+  const query = createMemo(() => {
+    const value = props.input.query || props.input.search_query || props.input.keyword || props.input.q
+    if (typeof value !== "string") return ""
+    return value
+  })
+  const results = createMemo(() => {
+    if (!props.output) return []
+    return parseSearchResults(props.output)
+  })
+  return (
+    <BasicTool
+      {...props}
+      icon="magnifying-glass"
+      trigger={
+        <div data-slot="basic-tool-tool-info-structured">
+          <div data-slot="basic-tool-tool-info-main">
+            <span data-slot="basic-tool-tool-title">
+              <TextShimmer text={i18n.t("ui.tool.websearch")} active={pending()} />
+            </span>
+            <Show when={query()}>
+              <span data-slot="basic-tool-tool-subtitle">
+                <TextShimmer text={query()} active={pending()} />
+              </span>
+            </Show>
+          </div>
+        </div>
+      }
+    >
+      <Show when={results().length > 0}>
+        <div data-slot="websearch-results">
+          <For each={results()}>
+            {(r) => (
+              <Collapsible variant="ghost">
+                <Collapsible.Trigger>
+                  <div data-component="websearch-result-trigger">
+                    <span class="text-12-medium truncate">{r.title}</span>
+                    <Collapsible.Arrow />
+                  </div>
+                </Collapsible.Trigger>
+                <Collapsible.Content>
+                  <div data-slot="websearch-result-detail">
+                    <Show when={r.url}>
+                      <a
+                        href={r.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="text-11-regular"
+                        data-slot="websearch-result-url"
+                      >
+                        {r.url}
+                      </a>
+                    </Show>
+                    <Show when={r.body}>
+                      <pre data-slot="websearch-result-body">{r.body}</pre>
+                    </Show>
+                  </div>
+                </Collapsible.Content>
+              </Collapsible>
+            )}
+          </For>
+        </div>
+      </Show>
+    </BasicTool>
+  )
+}
+
+ToolRegistry.register({ name: "websearch", render: WebSearchRender })
 ToolRegistry.register({
-  name: "websearch",
+  name: "web_search_search",
   render(props) {
-    const i18n = useI18n()
     const pending = createMemo(() => props.status === "pending" || props.status === "running")
     const query = createMemo(() => {
-      const value = props.input.query
-      if (typeof value !== "string") return ""
-      return value
+      const raw =
+        props.input.queries || props.input.query || props.input.search_query || props.input.keyword || props.input.q
+      if (Array.isArray(raw)) return raw.join(", ")
+      if (typeof raw === "string") return raw
+      return ""
     })
     const results = createMemo(() => {
       if (!props.output) return []
+      if (props.output.includes("[webpage")) return parseMcpSearchResults(props.output)
       return parseSearchResults(props.output)
     })
     return (
@@ -1574,7 +1665,7 @@ ToolRegistry.register({
           <div data-slot="basic-tool-tool-info-structured">
             <div data-slot="basic-tool-tool-info-main">
               <span data-slot="basic-tool-tool-title">
-                <TextShimmer text={i18n.t("ui.tool.websearch")} active={pending()} />
+                <TextShimmer text="Internal Web Search" active={pending()} />
               </span>
               <Show when={query()}>
                 <span data-slot="basic-tool-tool-subtitle">
