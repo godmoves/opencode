@@ -14,12 +14,23 @@ export interface PromptInspectorProps {
   parts: Record<string, PartType[]>
 }
 
-function Section(props: { title: string; children: any; defaultOpen?: boolean }) {
+function tokens(text: string) {
+  const n = Math.round(text.length / 4)
+  if (n >= 1000) return `~${(n / 1000).toFixed(1)}k tokens`
+  return `~${n} tokens`
+}
+
+function Section(props: { title: string; count?: string; children: any; defaultOpen?: boolean }) {
   return (
     <Collapsible defaultOpen={props.defaultOpen} variant="ghost">
       <Collapsible.Trigger>
         <div data-component="prompt-section-trigger">
-          <span data-slot="prompt-section-title" class="text-13-regular">{props.title}</span>
+          <span data-slot="prompt-section-title" class="text-13-regular">
+            {props.title}
+            <Show when={props.count}>
+              {(c) => <span class="text-text-weak"> ({c()})</span>}
+            </Show>
+          </span>
           <Collapsible.Arrow />
         </div>
       </Collapsible.Trigger>
@@ -77,6 +88,12 @@ export function PromptInspector(props: PromptInspectorProps) {
   const tools = () => {
     const p = prompt()
     return p?.tools ?? []
+  }
+
+  const toolsText = () => {
+    return tools()
+      .map((t) => (typeof t === "string" ? t : JSON.stringify(t)))
+      .join("")
   }
 
   const params = () => {
@@ -181,12 +198,12 @@ export function PromptInspector(props: PromptInspectorProps) {
           </span>
         </div>
         <div data-slot="prompt-inspector-sections">
-          <Section title="System Prompt">
+          <Section title="System Prompt" count={tokens(system())}>
             <pre data-slot="prompt-code-block">
               <code>{system()}</code>
             </pre>
           </Section>
-          <Section title={`Tools (${tools().length})`}>
+          <Section title={`Tools (${tools().length})`} count={tokens(toolsText())}>
             <Show
               when={tools().length > 0}
               fallback={<span class="text-12-regular text-text-weak">(none)</span>}
@@ -196,12 +213,12 @@ export function PromptInspector(props: PromptInspectorProps) {
               </div>
             </Show>
           </Section>
-          <Section title="Model Parameters">
+          <Section title="Model Parameters" count={tokens(params())}>
             <pre data-slot="prompt-code-block">
               <code>{params()}</code>
             </pre>
           </Section>
-          <Section title="Conversation History" defaultOpen>
+          <Section title="Conversation History" count={tokens(earlier() + lastTurn())} defaultOpen>
             <Show when={earlier()}>
               {(() => {
                 const [open, setOpen] = createSignal(false)

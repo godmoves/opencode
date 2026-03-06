@@ -10,7 +10,7 @@ import { Flag } from "../flag/flag"
 import { Identifier } from "../id/id"
 import { Installation } from "../installation"
 
-import { Database, NotFoundError, eq, and, or, gte, isNull, desc, like, inArray, lt } from "../storage/db"
+import { Database, NotFoundError, eq, and, or, gt, gte, isNull, desc, like, inArray, lt } from "../storage/db"
 import type { SQL } from "../storage/db"
 import { SessionTable, MessageTable, PartTable } from "./session.sql"
 import { ProjectTable } from "../project/project.sql"
@@ -706,15 +706,37 @@ export namespace Session {
     async (input) => {
       // CASCADE delete handles parts automatically
       Database.use((db) => {
-        db.delete(MessageTable)
+        // Check if this is a user message — if so, also delete the paired assistant reply
+        const row = db
+          .select({ id: MessageTable.id, data: MessageTable.data })
+          .from(MessageTable)
           .where(and(eq(MessageTable.id, input.messageID), eq(MessageTable.session_id, input.sessionID)))
-          .run()
-        Database.effect(() =>
-          Bus.publish(MessageV2.Event.Removed, {
-            sessionID: input.sessionID,
-            messageID: input.messageID,
-          }),
-        )
+          .get()
+        if (!row) return
+
+        const ids = [input.messageID]
+        if ((row.data as any).role === "user") {
+          const next = db
+            .select({ id: MessageTable.id, data: MessageTable.data })
+            .from(MessageTable)
+            .where(and(eq(MessageTable.session_id, input.sessionID), gt(MessageTable.id, input.messageID)))
+            .orderBy(MessageTable.id)
+            .limit(1)
+            .get()
+          if (next && (next.data as any).role === "assistant") ids.push(next.id)
+        }
+
+        for (const id of ids) {
+          db.delete(MessageTable)
+            .where(and(eq(MessageTable.id, id), eq(MessageTable.session_id, input.sessionID)))
+            .run()
+          Database.effect(() =>
+            Bus.publish(MessageV2.Event.Removed, {
+              sessionID: input.sessionID,
+              messageID: id,
+            }),
+          )
+        }
       })
       return input.messageID
     },

@@ -22,6 +22,7 @@ import z from "zod"
 import { Plugin } from "../plugin"
 import { WebSearchTool } from "./websearch"
 import { CodeSearchTool } from "./codesearch"
+import { MCP } from "../mcp"
 import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
 import { LspTool } from "./lsp"
@@ -136,11 +137,17 @@ export namespace ToolRegistry {
     agent?: Agent.Info,
   ) {
     const tools = await all()
+    const mcpStatus = await MCP.status().catch(() => ({}) as Record<string, never>)
+    const hasMcpSearch = mcpStatus["web_search"]?.status === "connected"
+
     const result = await Promise.all(
       tools
         .filter((t) => {
-          // Enable websearch/codesearch for zen users OR via enable flag
-          if (t.id === "codesearch" || t.id === "websearch") {
+          // websearch: skip if MCP web_search is connected, otherwise always enable
+          if (t.id === "websearch") return !hasMcpSearch
+
+          // Enable codesearch for zen users OR via enable flag
+          if (t.id === "codesearch") {
             return model.providerID === "opencode" || Flag.OPENCODE_ENABLE_EXA
           }
 
