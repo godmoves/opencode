@@ -5,7 +5,7 @@ import { useFileComponent } from "../context/file"
 
 import { Binary } from "@opencode-ai/util/binary"
 import { getDirectory, getFilename } from "@opencode-ai/util/path"
-import { createEffect, createMemo, createSignal, For, on, ParentProps, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, For, on, onCleanup, ParentProps, Show } from "solid-js"
 import { Dynamic } from "solid-js/web"
 import { AssistantParts, Message, Part, PART_MAPPING } from "./message-part"
 import { Card } from "./card"
@@ -372,6 +372,32 @@ export function SessionTurn(
     return true
   })
 
+  const [elapsed, setElapsed] = createSignal("")
+  createEffect(() => {
+    if (!showThinking()) {
+      setElapsed("")
+      return
+    }
+    const start = message()?.time.created
+    if (typeof start !== "number") return
+
+    const fmt = () => {
+      const ms = Date.now() - start
+      if (ms < 0) return ""
+      const sec = Math.floor(ms / 1000)
+      if (sec < 60) return `${sec}s`
+      const min = Math.floor(sec / 60)
+      const s = sec % 60
+      if (min < 60) return `${min}m${s}s`
+      const h = Math.floor(min / 60)
+      const m = min % 60
+      return `${h}h${m}m${s}s`
+    }
+    setElapsed(fmt())
+    const timer = setInterval(() => setElapsed(fmt()), 1000)
+    onCleanup(() => clearInterval(timer))
+  })
+
   const autoScroll = createAutoScroll({
     working,
     onUserInteracted: props.onUserInteracted,
@@ -421,6 +447,9 @@ export function SessionTurn(
                 <Show when={showThinking()}>
                   <div data-slot="session-turn-thinking">
                     <TextShimmer text={i18n.t("ui.sessionTurn.status.thinking")} />
+                    <Show when={elapsed()}>
+                      <span data-slot="session-turn-elapsed">{elapsed()}</span>
+                    </Show>
                     <Show when={!showReasoningSummaries()}>
                       <TextReveal
                         text={reasoningHeading()}

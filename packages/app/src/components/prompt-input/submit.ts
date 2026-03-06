@@ -64,6 +64,8 @@ export function createPromptSubmit(input: PromptSubmitInput) {
   const language = useLanguage()
   const params = useParams()
 
+  let cooldown = false
+
   const errorMessage = (err: unknown) => {
     if (err && typeof err === "object" && "data" in err) {
       const data = (err as { data?: { message?: string } }).data
@@ -124,7 +126,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     const mode = input.mode()
 
     if (text.trim().length === 0 && images.length === 0 && input.commentCount() === 0) {
-      if (input.working()) abort()
+      if (input.working() && !cooldown) abort()
       return
     }
 
@@ -244,6 +246,8 @@ export function createPromptSubmit(input: PromptSubmitInput) {
 
     if (mode === "shell") {
       clearInput()
+      cooldown = true
+      setTimeout(() => (cooldown = false), 500)
       client.session
         .shell({
           sessionID: session.id,
@@ -267,6 +271,8 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       const customCommand = sync.data.command.find((c) => c.name === commandName)
       if (customCommand) {
         clearInput()
+        cooldown = true
+        setTimeout(() => (cooldown = false), 500)
         client.session
           .command({
             sessionID: session.id,
@@ -334,6 +340,8 @@ export function createPromptSubmit(input: PromptSubmitInput) {
 
     removeCommentItems(commentItems)
     clearInput()
+    cooldown = true
+    setTimeout(() => (cooldown = false), 500)
     addOptimisticMessage()
 
     const waitForWorktree = async () => {
